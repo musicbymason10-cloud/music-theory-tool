@@ -45,13 +45,40 @@ const ENHARMONIC_EQUIVALENTS={"DB":"C#","EB":"D#","GB":"F#","AB":"G#","BB":"A#",
 const CHORD_TYPES={major:[0,4,7],minor:[0,3,7],dim:[0,3,6],aug:[0,4,8],"6":[0,4,7,9],"m6":[0,3,7,9],"7":[0,4,7,10],"maj7":[0,4,7,11],"m7":[0,3,7,10],dim7:[0,3,6,9],m7b5:[0,3,6,10],"9":[0,4,7,10,14],maj9:[0,4,7,11,14],m9:[0,3,7,10,14],"11":[0,4,7,10,14,17],maj11:[0,4,7,11,14,17],m11:[0,3,7,10,14,17],"13":[0,4,7,10,14,21],maj13:[0,4,7,11,14,21],m13:[0,3,7,10,14,21],m7b5add9:[0,3,6,10,14],m7b5add11:[0,3,6,10,17],m7b5add13:[0,3,6,10,21]};
 const MODES={ionian:{intervals:[0,2,4,5,7,9,11],names:["I","ii","iii","IV","V","vi","vii°"]},dorian:{intervals:[0,2,3,5,7,9,10],names:["i","ii","♭III","IV","v","vi°","♭VII"]},phrygian:{intervals:[0,1,3,5,7,8,10],names:["i","♭II","♭III","iv","v","♭VI","♭VII"]},lydian:{intervals:[0,2,4,6,7,9,11],names:["I","II","iii","♯iv°","V","vi","vii"]},mixolydian:{intervals:[0,2,4,5,7,9,10],names:["I","ii","iii°","IV","v","vi°","♭VII"]},aeolian:{intervals:[0,2,3,5,7,8,10],names:["i","ii°","♭III","iv","v","♭VI","♭VII"]},locrian:{intervals:[0,1,3,5,6,8,10],names:["i°","♭II","♭III","iv","♭V","♭VI","♭VII"]}};
 const PREFERRED_VOICINGS={
-major:{E:[null,3,2,0,1,0],A:[null,3,2,0,1,0],D:[null,null,10,9,8,8]},
-minor:{E:[null,3,5,5,4,3],A:[null,3,5,5,4,3],D:[null,null,10,8,8,8]},
-maj7:{E:[null,3,2,4,1,0],A:[3,5,4,5,3,null],D:[null,null,12,12,12,10]},
-m7:{E:[null,3,5,3,4,3],A:[3,5,3,5,3,null],D:[null,null,11,11,12,10]},
-"7":{E:[null,3,2,3,1,0],A:[3,5,3,5,3,null],D:[null,null,12,11,12,10]},
-m7b5:{E:[null,3,4,3,4,null],A:[null,4,3,4,3,null],D:[null,null,11,11,11,10]}
+  // Internally every shape is stored high-to-low: e-B-G-D-A-E.
+  // The UI renderer reverses this to the requested guitar-tab order: E-A-D-G-B-e.
+  major:{
+    E:[8,8,9,10,null,8],
+    A:[0,1,0,2,3,null],
+    D:[8,8,9,10,null,null]
+  },
+  minor:{
+    E:[8,8,8,10,null,8],
+    A:[3,4,5,5,3,null],
+    D:[8,8,8,10,null,null]
+  },
+  maj7:{
+    E:[8,8,9,9,null,8],
+    A:[3,5,4,5,3,null],
+    D:[8,8,9,10,null,null]
+  },
+  m7:{
+    E:[8,8,8,10,null,8],
+    A:[3,4,3,5,3,null],
+    D:[8,8,8,10,null,null]
+  },
+  "7":{
+    E:[8,8,9,8,null,8],
+    A:[3,5,3,5,3,null],
+    D:[8,8,9,10,null,null]
+  },
+  m7b5:{
+    E:[8,9,8,9,null,8],
+    A:[null,3,4,3,4,null],
+    D:[8,9,8,10,null,null]
+  }
 };
+
 function normalizeNote(note){note=note.trim().toUpperCase();return ENHARMONIC_EQUIVALENTS[note]||note}
 function noteNumber(note){return NOTES.indexOf(normalizeNote(note))}
 function noteAtFret(openNote,fret){return NOTES[(noteNumber(openNote)+fret)%12]}
@@ -59,8 +86,35 @@ function chordNotes(root,intervals){const n=noteNumber(root);return [...new Set(
 function scaleNotes(root,mode){const n=noteNumber(root);return MODES[mode].intervals.map(i=>NOTES[(n+i)%12])}
 function diatonicSeventhQuality(scale,degree){const root=scale[degree],rn=noteNumber(root);const intervals=[scale[(degree+2)%7],scale[(degree+4)%7],scale[(degree+6)%7]].map(x=>(noteNumber(x)-rn+12)%12).sort((a,b)=>a-b);const all=[0,...intervals];const s=JSON.stringify(all);return s===JSON.stringify([0,3,6,9])?"dim7":s===JSON.stringify([0,3,6,10])?"m7b5":s===JSON.stringify([0,3,7,10])?"m7":s===JSON.stringify([0,4,7,10])?"7":"maj7"}
 function diatonicQualityForDegree(scale,degree,extension){const root=scale[degree],rn=noteNumber(root);const offsets=extension===7?[0,2,4,6]:extension===9?[0,2,4,6,8]:extension===11?[0,2,4,6,8,10]:[0,2,4,6,8,10,12];const intervals=offsets.map(o=>(noteNumber(scale[(degree+o)%7])-rn+12)%12);const sev=intervals.slice(0,4).sort((a,b)=>a-b),s=JSON.stringify(sev);if(s===JSON.stringify([0,3,6,10]))return extension===7?"m7b5":extension===9?"m7b5add9":extension===11?"m7b5add11":"m7b5add13";if(s===JSON.stringify([0,3,6,9])&&extension===7)return "dim7";const third=sev[1],seventh=sev[3],prefix=third===4&&seventh===11?"maj":third===3&&seventh===10?"m":"";return prefix+String(extension)}
-function transposeShapeFromC(shape,rootString,root){const idx={E:5,A:4,D:3}[rootString];if(shape[idx]===null)return null;let shift=noteNumber(root);if(shift>6)shift-=12;return shape.map(f=>f===null?null:f+shift)}
-function preferredShapeFor(root,quality,rootString){const t=PREFERRED_VOICINGS[quality]?.[rootString];if(!t)return null;const s=transposeShapeFromC(t,rootString,root);if(!s||s.some(f=>f!==null&&(f<0||f>15)))return null;return s}
+function transposeShapeFromC(shape,rootString,root){
+  const rootIndex={E:5,A:4,D:3}[rootString];
+  const cRootFret=shape[rootIndex];
+  if(cRootFret===null||cRootFret===undefined)return null;
+
+  const targetNote=noteNumber(root);
+  if(targetNote<0)return null;
+
+  // Move the C-rooted shape so that the same root note lands on the
+  // requested root position. Try the nearest practical octave first.
+  const rawShift=targetNote;
+  const candidates=[rawShift,rawShift-12,rawShift+12];
+  let best=null;
+  candidates.forEach(shift=>{
+    const candidate=shape.map(f=>f===null?null:f+shift);
+    if(candidate.some(f=>f!==null&&(f<0||f>15)))return;
+    const rootFret=candidate[rootIndex];
+    if(rootFret<0||rootFret>15)return;
+    const span=fretSpan(candidate);
+    if(!best||Math.abs(rootFret-cRootFret)<Math.abs(best[rootIndex]-cRootFret)||
+       (Math.abs(rootFret-cRootFret)===Math.abs(best[rootIndex]-cRootFret)&&span<fretSpan(best)))best=candidate;
+  });
+  return best;
+}
+function preferredShapeFor(root,quality,rootString){
+  const shape=PREFERRED_VOICINGS[quality]?.[rootString];
+  if(!shape)return null;
+  return transposeShapeFromC(shape,rootString,root);
+}
 function possibleFretsForString(openNote,notes){const out=[];for(let f=0;f<=15;f++)if(notes.includes(noteAtFret(openNote,f)))out.push(f);return out}
 function playedNotesForShape(shape){return [...new Set(shape.flatMap((f,i)=>f===null?[]:[noteAtFret(GUITAR_STRINGS[i+1],f)]))]}
 function fretSpan(shape){const p=shape.filter(f=>f!==null);return p.length?Math.max(...p)-Math.min(...p):0}
@@ -72,7 +126,7 @@ function findBestShapeForRootString(root,notes,rootString,extended=false){let se
 function voicingFor(root,quality,notes,rootString){const preferred=preferredShapeFor(root,quality,rootString);if(preferred)return preferred;const extended=["9","maj9","m9","11","maj11","m11","13","maj13","m13","m7b5add9","m7b5add11","m7b5add13"].includes(quality);return findBestShapeForRootString(root,notes,rootString,extended)}
 function buildDiatonicChords(root,mode,chordLevel){const scale=scaleNotes(root,mode),modeData=MODES[mode],chords=[];for(let degree=0;degree<7;degree++){const chordRoot=scale[degree];let quality;if(chordLevel==="triads"){const rn=noteNumber(chordRoot),third=(noteNumber(scale[(degree+2)%7])-rn+12)%12,fifth=(noteNumber(scale[(degree+4)%7])-rn+12)%12;quality=third===4&&fifth===7?"major":third===3&&fifth===7?"minor":third===3&&fifth===6?"dim":third===4&&fifth===8?"aug":"major"}else if(chordLevel==="7ths")quality=diatonicSeventhQuality(scale,degree);else if(chordLevel==="9ths")quality=diatonicQualityForDegree(scale,degree,9);else if(chordLevel==="11ths")quality=diatonicQualityForDegree(scale,degree,11);else if(chordLevel==="13ths")quality=diatonicQualityForDegree(scale,degree,13);else{const rn=noteNumber(chordRoot),third=(noteNumber(scale[(degree+2)%7])-rn+12)%12,fifth=(noteNumber(scale[(degree+4)%7])-rn+12)%12;quality=third===3&&fifth===7?"m6":"6"}let notes;if(chordLevel==="6ths")notes=[chordRoot,scale[(degree+2)%7],scale[(degree+4)%7],scale[(degree+5)%7]];else notes=chordNotes(chordRoot,CHORD_TYPES[quality]);const voicings={};["E","A","D"].forEach(rs=>voicings[rs]=voicingFor(chordRoot,quality,notes,rs));chords.push({degree:modeData.names[degree],name:chordRoot+(quality==="major"?"":quality),root:chordRoot,quality,notes,voicings})}return chords}
 function formatFret(f){return f===null||f===undefined?"x":String(f)}
-function renderVoicing(v){if(!v)return "No practical voicing found.";return [["e",0],["B",1],["G",2],["D",3],["A",4],["E",5]].map(([n,i])=>n+"|"+formatFret(v[i])).join("\n")}
+function renderVoicing(v){if(!v)return "No practical voicing found.";return [["E",5],["A",4],["D",3],["G",2],["B",1],["e",0]].map(([n,i])=>n+"|"+formatFret(v[i])).join("\n")}
 function generateDiatonic(){const root=document.getElementById("root").value,mode=document.getElementById("mode").value,level=document.getElementById("chordLevel").value,scale=scaleNotes(root,mode),chords=buildDiatonicChords(root,mode,level);let html="<h2>Scale</h2><div class='scale'>"+scale.join("  ")+"</div><h2>Diatonic Chords</h2>";["E","A","D"].forEach(rs=>{html+="<div class='string-row'><h3 class='string-label'>Root on "+rs+" string</h3><div class='chord-row'>";chords.forEach(c=>html+="<div class='chord'><h3><span class='degree'>"+c.degree+"</span>"+c.name+"</h3><div class='notes'>"+c.notes.join(" ")+"</div><pre>"+renderVoicing(c.voicings[rs])+"</pre></div>");html+="</div></div>"});document.getElementById("diatonicOutput").innerHTML=html}
 function parseChordName(input){let chord=input.trim().toLowerCase().replaceAll("major seventh","maj7").replaceAll("major 7th","maj7").replaceAll("major 7","maj7").replaceAll("minor seventh","m7").replaceAll("minor 7th","m7").replaceAll("minor 7","m7").replaceAll("dominant seventh","7").replaceAll("dominant 7th","7").replaceAll("dominant 7","7").replaceAll("major ninth","maj9").replaceAll("major 9th","maj9").replaceAll("major 9","maj9").replaceAll("minor ninth","m9").replaceAll("minor 9th","m9").replaceAll("minor 9","m9").replaceAll("major sixth","6").replaceAll("major 6th","6").replaceAll("minor sixth","m6").replaceAll("minor 6th","m6").replaceAll("diminished seventh","dim7").replaceAll("diminished 7th","dim7").replaceAll(" ","");let root,quality;if(chord.length>=2&&(chord[1]==="#"||chord[1]==="b")){root=chord.substring(0,2);quality=chord.substring(2)}else{root=chord.substring(0,1);quality=chord.substring(1)}root=normalizeNote(root);if(!NOTES.includes(root))return null;if(!quality)quality="major";else if(quality==="maj")quality="major";else if(["m","min","minor"].includes(quality))quality="minor";quality=quality.replaceAll("th","");if(!CHORD_TYPES[quality])return null;return{root,quality,intervals:CHORD_TYPES[quality]}}
 function generateSingleChord(){const chord=parseChordName(document.getElementById("singleChord").value),output=document.getElementById("singleOutput");if(!chord){output.innerHTML='<div class="error">Sorry, I don\'t recognize that chord.</div>';return}const notes=chordNotes(chord.root,chord.intervals);let html="<div class='chord'><h3>"+chord.root+(chord.quality==="major"?"":chord.quality)+"</h3><div class='notes'>Chord tones: "+notes.join(" ")+"</div>";["E","A","D"].forEach(rs=>html+="<div class='voicing'><strong>Root on "+rs+" string</strong><pre>"+renderVoicing(voicingFor(chord.root,chord.quality,notes,rs))+"</pre></div>");html+="</div>";output.innerHTML=html}
