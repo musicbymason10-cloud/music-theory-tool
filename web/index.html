@@ -104,8 +104,17 @@ function shapeHasRootOnString(shape,root,rootString){
   return true;
 }
 function findBestShapeForRootString(root,notes,rootString,extended=false){let searchNotes=[...notes];if(extended){const rn=noteNumber(root);const fifth=NOTES[(rn+7)%12];searchNotes=searchNotes.filter(n=>n!==fifth)}const matching=generateShapes(searchNotes).filter(s=>shapeHasRootOnString(s,root,rootString));if(!matching.length)return null;let best=null,bestScore=-Infinity;matching.forEach(shape=>{const played=playedNotesForShape(shape);let score=played.length*30-shape.filter(f=>f===null).length*10-fretSpan(shape)*12-estimatedFingers(shape)*8;if(extended&&rootString==="D")score+=40;if(played.length===searchNotes.length)score+=30;if(score>bestScore){bestScore=score;best=shape}});return best}
-function voicingFor(root,quality,notes,rootString){const preferred=preferredShapeFor(root,quality,rootString);if(preferred)return preferred;const extended=["9","maj9","m9","11","maj11","m11","13","maj13","m13","m7b5add9","m7b5add11","m7b5add13"].includes(quality);return findBestShapeForRootString(root,notes,rootString,extended)}
-function eStringDiatonicSeventhVoicing(root, quality) {
+function voicingFor(root,quality,notes,rootString){
+  if (quality === "major" || quality === "minor" || quality === "dim" || quality === "aug") {
+    return triadVoicingFor(root, quality, notes, rootString);
+  }
+
+  const preferred=preferredShapeFor(root,quality,rootString);
+  if(preferred)return preferred;
+
+  const extended=["9","maj9","m9","11","maj11","m11","13","maj13","m13","m7b5add9","m7b5add11","m7b5add13"].includes(quality);
+  return findBestShapeForRootString(root,notes,rootString,extended);
+}
   const templates = {
     maj7: [8, null, 9, 9, 8, 8],
     m7:   [8, null, 8, 8, 8, null],
