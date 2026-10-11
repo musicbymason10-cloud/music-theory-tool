@@ -226,7 +226,57 @@ function renderVoicing(v){
 }
 function generateDiatonic(){const root=document.getElementById("root").value,mode=document.getElementById("mode").value,level=document.getElementById("chordLevel").value,scale=scaleNotes(root,mode),chords=buildDiatonicChords(root,mode,level);let html="<h2>Scale</h2><div class='scale'>"+scale.join("  ")+"</div><h2>Diatonic Chords</h2>";["E","A","D"].forEach(rs=>{html+="<div class='string-row'><h3 class='string-label'>Root on "+rs+" string</h3><div class='chord-row'>";chords.forEach(c=>html+="<div class='chord'><h3><span class='degree'>"+c.degree+"</span>"+c.name+"</h3><div class='notes'>"+c.notes.join(" ")+"</div><pre>"+renderVoicing(c.voicings[rs])+"</pre></div>");html+="</div></div>"});document.getElementById("diatonicOutput").innerHTML=html}
 function parseChordName(input){let chord=input.trim().toLowerCase().replaceAll("major seventh","maj7").replaceAll("major 7th","maj7").replaceAll("major 7","maj7").replaceAll("minor seventh","m7").replaceAll("minor 7th","m7").replaceAll("minor 7","m7").replaceAll("dominant seventh","7").replaceAll("dominant 7th","7").replaceAll("dominant 7","7").replaceAll("major ninth","maj9").replaceAll("major 9th","maj9").replaceAll("major 9","maj9").replaceAll("minor ninth","m9").replaceAll("minor 9th","m9").replaceAll("minor 9","m9").replaceAll("major sixth","6").replaceAll("major 6th","6").replaceAll("minor sixth","m6").replaceAll("minor 6th","m6").replaceAll("diminished seventh","dim7").replaceAll("diminished 7th","dim7").replaceAll(" ","");let root,quality;if(chord.length>=2&&(chord[1]==="#"||chord[1]==="b")){root=chord.substring(0,2);quality=chord.substring(2)}else{root=chord.substring(0,1);quality=chord.substring(1)}root=normalizeNote(root);if(!NOTES.includes(root))return null;if(!quality)quality="major";else if(quality==="maj")quality="major";else if(["m","min","minor"].includes(quality))quality="minor";quality=quality.replaceAll("th","");if(!CHORD_TYPES[quality])return null;return{root,quality,intervals:CHORD_TYPES[quality]}}
-function generateSingleChord(){const chord=parseChordName(document.getElementById("singleChord").value),output=document.getElementById("singleOutput");if(!chord){output.innerHTML='<div class="error">Sorry, I don\'t recognize that chord.</div>';return}const notes=chordNotes(chord.root,chord.intervals);let html="<div class='chord'><h3>"+chord.root+(chord.quality==="major"?"":chord.quality)+"</h3><div class='notes'>Chord tones: "+notes.join(" ")+"</div>";["E","A","D"].forEach(rs=>html+="<div class='voicing'><strong>Root on "+rs+" string</strong><pre>"+renderVoicing(voicingFor(chord.root,chord.quality,notes,rs))+"</pre></div>");html+="</div>";output.innerHTML=html}
+function generateSingleChord() {
+  const chord = parseChordName(
+    document.getElementById("singleChord").value
+  );
+  const output = document.getElementById("singleOutput");
+
+  if (!chord) {
+    output.innerHTML =
+      '<div class="error">Sorry, I don\'t recognize that chord.</div>';
+    return;
+  }
+
+  const notes = chordNotes(chord.root, chord.intervals);
+  const isTriad = ["major", "minor", "dim", "aug"].includes(chord.quality);
+  const seventhQualities = ["maj7", "m7", "7", "m7b5"];
+
+  let html =
+    "<div class='chord'><h3>" +
+    chord.root +
+    (chord.quality === "major" ? "" : chord.quality) +
+    "</h3><div class='notes'>Chord tones: " +
+    notes.join(" ") +
+    "</div>";
+
+  ["E", "A", "D"].forEach(rs => {
+    let shape;
+
+    if (isTriad) {
+      // Use the same triad-selection logic as the diatonic generator.
+      shape = triadVoicingFor(chord.root, chord.quality, notes, rs);
+    } else if (rs === "E" && seventhQualities.includes(chord.quality)) {
+      // Reuse the diatonic generator's preferred E-string 7th-chord shapes.
+      shape =
+        eStringDiatonicSeventhVoicing(chord.root, chord.quality) ||
+        voicingFor(chord.root, chord.quality, notes, rs);
+    } else {
+      // Use the existing voicing logic for all other chords.
+      shape = voicingFor(chord.root, chord.quality, notes, rs);
+    }
+
+    html +=
+      "<div class='voicing'><strong>Root on " +
+      rs +
+      " string</strong><pre>" +
+      renderVoicing(shape) +
+      "</pre></div>";
+  });
+
+  html += "</div>";
+  output.innerHTML = html;
+}
 let quizScore=0,quizQuestion=0,currentInterval=null;const QUIZ_LENGTH=5;function intervalName(i){return {0:"unison or octave",1:"minor 2nd",2:"major 2nd",3:"minor 3rd",4:"major 3rd",5:"perfect 4th",6:"tritone",7:"perfect 5th",8:"minor 6th",9:"major 6th",10:"minor 7th",11:"major 7th"}[i]}function startQuiz(){quizScore=0;quizQuestion=0;nextQuizQuestion()}function nextQuizQuestion(){quizQuestion++;const n1=NOTES[Math.floor(Math.random()*12)],n2=NOTES[Math.floor(Math.random()*12)];currentInterval=(noteNumber(n2)-noteNumber(n1)+12)%12;document.getElementById("quizOutput").innerHTML=`<div class="quiz-question"><div class="quiz-progress">Question ${quizQuestion} of ${QUIZ_LENGTH}</div><br>Root note: <strong>${n1}</strong><br><br>Second note: <strong>${n2}</strong></div><input id="quizAnswer" type="text" placeholder="e.g. major 3rd"><br><br><button onclick="checkQuiz()">Submit Answer</button><div id="quizResult"></div>`;document.getElementById("quizAnswer").focus()}function checkQuiz(){const answer=document.getElementById("quizAnswer").value.trim().toLowerCase(),correct=intervalName(currentInterval),result=document.getElementById("quizResult"),acceptable=currentInterval===0?["unison","octave","unison or octave"]:[correct.toLowerCase()];if(acceptable.includes(answer)){quizScore++;result.innerHTML="<p><strong>✓ Correct!</strong></p>"}else result.innerHTML="<p><strong>✗ Incorrect.</strong> The correct answer was: <strong>"+correct+"</strong></p>";result.innerHTML+="<div class='score'>Score: "+quizScore+"/"+quizQuestion+"</div>";if(quizQuestion<QUIZ_LENGTH)result.innerHTML+='<br><button onclick="nextQuizQuestion()">Next Question →</button>';else{const pct=Math.round(quizScore/QUIZ_LENGTH*100);result.innerHTML+=`<div class="quiz-complete"><h3>🏆 Quiz Complete!</h3><p>Final Score: <strong>${quizScore}/${QUIZ_LENGTH}</strong></p><p>${pct}%</p><button onclick="startQuiz()">Play Again</button></div>`}}
 </script>
 </body>
