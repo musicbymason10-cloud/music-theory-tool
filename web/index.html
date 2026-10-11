@@ -40,7 +40,7 @@ This tool is designed to help you understand music theory on the guitar by showi
 </div>
 <script>
 const NOTES=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
-const GUITAR_STRINGS={1:"E",2:"B",3:"G",4:"D",5:"A",6:"E"};
+const GUITAR_STRINGS={1:"E",2:"A",3:"D",4:"G",5:"B",6:"E"};
 const ENHARMONIC_EQUIVALENTS={"DB":"C#","EB":"D#","GB":"F#","AB":"G#","BB":"A#","CB":"B","FB":"E","E#":"F","B#":"C"};
 const CHORD_TYPES={major:[0,4,7],minor:[0,3,7],dim:[0,3,6],aug:[0,4,8],"6":[0,4,7,9],"m6":[0,3,7,9],"7":[0,4,7,10],"maj7":[0,4,7,11],"m7":[0,3,7,10],dim7:[0,3,6,9],m7b5:[0,3,6,10],"9":[0,4,7,10,14],maj9:[0,4,7,11,14],m9:[0,3,7,10,14],"11":[0,4,7,10,14,17],maj11:[0,4,7,11,14,17],m11:[0,3,7,10,14,17],"13":[0,4,7,10,14,21],maj13:[0,4,7,11,14,21],m13:[0,3,7,10,14,21],m7b5add9:[0,3,6,10,14],m7b5add11:[0,3,6,10,17],m7b5add13:[0,3,6,10,21]};
 const MODES={ionian:{intervals:[0,2,4,5,7,9,11],names:["I","ii","iii","IV","V","vi","vii°"]},dorian:{intervals:[0,2,3,5,7,9,10],names:["i","ii","♭III","IV","v","vi°","♭VII"]},phrygian:{intervals:[0,1,3,5,7,8,10],names:["i","♭II","♭III","iv","v","♭VI","♭VII"]},lydian:{intervals:[0,2,4,6,7,9,11],names:["I","II","iii","♯iv°","V","vi","vii"]},mixolydian:{intervals:[0,2,4,5,7,9,10],names:["I","ii","iii°","IV","v","vi°","♭VII"]},aeolian:{intervals:[0,2,3,5,7,8,10],names:["i","ii°","♭III","iv","v","♭VI","♭VII"]},locrian:{intervals:[0,1,3,5,6,8,10],names:["i°","♭II","♭III","iv","♭V","♭VI","♭VII"]}};
@@ -59,15 +59,50 @@ function chordNotes(root,intervals){const n=noteNumber(root);return [...new Set(
 function scaleNotes(root,mode){const n=noteNumber(root);return MODES[mode].intervals.map(i=>NOTES[(n+i)%12])}
 function diatonicSeventhQuality(scale,degree){const root=scale[degree],rn=noteNumber(root);const intervals=[scale[(degree+2)%7],scale[(degree+4)%7],scale[(degree+6)%7]].map(x=>(noteNumber(x)-rn+12)%12).sort((a,b)=>a-b);const all=[0,...intervals];const s=JSON.stringify(all);return s===JSON.stringify([0,3,6,9])?"dim7":s===JSON.stringify([0,3,6,10])?"m7b5":s===JSON.stringify([0,3,7,10])?"m7":s===JSON.stringify([0,4,7,10])?"7":"maj7"}
 function diatonicQualityForDegree(scale,degree,extension){const root=scale[degree],rn=noteNumber(root);const offsets=extension===7?[0,2,4,6]:extension===9?[0,2,4,6,8]:extension===11?[0,2,4,6,8,10]:[0,2,4,6,8,10,12];const intervals=offsets.map(o=>(noteNumber(scale[(degree+o)%7])-rn+12)%12);const sev=intervals.slice(0,4).sort((a,b)=>a-b),s=JSON.stringify(sev);if(s===JSON.stringify([0,3,6,10]))return extension===7?"m7b5":extension===9?"m7b5add9":extension===11?"m7b5add11":"m7b5add13";if(s===JSON.stringify([0,3,6,9])&&extension===7)return "dim7";const third=sev[1],seventh=sev[3],prefix=third===4&&seventh===11?"maj":third===3&&seventh===10?"m":"";return prefix+String(extension)}
-function transposeShapeFromC(shape,rootString,root){const idx={E:5,A:4,D:3}[rootString];if(shape[idx]===null)return null;let shift=noteNumber(root);if(shift>6)shift-=12;return shape.map(f=>f===null?null:f+shift)}
-function preferredShapeFor(root,quality,rootString){const t=PREFERRED_VOICINGS[quality]?.[rootString];if(!t)return null;const s=transposeShapeFromC(t,rootString,root);if(!s||s.some(f=>f!==null&&(f<0||f>15)))return null;return s}
+function transposeShapeFromC(shape,rootString,root){
+  const idx={E:0,A:1,D:2}[rootString];
+  if(shape[idx]===null||shape[idx]===undefined)return null;
+  let shift=noteNumber(root);
+  if(shift>6)shift-=12;
+  return shape.map(f=>f===null?null:f+shift);
+}
+function preferredShapeFor(root,quality,rootString){
+  const t=PREFERRED_VOICINGS[quality]?.[rootString];
+  if(!t)return null;
+
+  const s=transposeShapeFromC(t,rootString,root);
+
+  if(
+    !s||
+    s.some(f=>f!==null&&(f<0||f>15))||
+    !shapeHasRootOnString(s,root,rootString)
+  )return null;
+
+  return s;
+}
 function possibleFretsForString(openNote,notes){const out=[];for(let f=0;f<=15;f++)if(notes.includes(noteAtFret(openNote,f)))out.push(f);return out}
-function playedNotesForShape(shape){return [...new Set(shape.flatMap((f,i)=>f===null?[]:[noteAtFret(GUITAR_STRINGS[i+1],f)]))]}
+function playedNotesForShape(shape){
+  return [...new Set(shape.flatMap((f,i)=>
+    f===null?[]:[noteAtFret(GUITAR_STRINGS[i+1],f)]
+  ))];
+}
 function fretSpan(shape){const p=shape.filter(f=>f!==null);return p.length?Math.max(...p)-Math.min(...p):0}
 function estimatedFingers(shape){return new Set(shape.filter(f=>f!==null&&f>0)).size}
 function physicallyReasonable(shape){return shape.filter(f=>f!==null).length>=3&&fretSpan(shape)<=4&&estimatedFingers(shape)<=4}
 function generateShapes(notes){const possible={};for(let i=1;i<=6;i++)possible[i]=possibleFretsForString(GUITAR_STRINGS[i],notes);const shapes=[];function build(n,current){if(n===7){if(physicallyReasonable(current))shapes.push([...current]);return}current.push(null);build(n+1,current);current.pop();for(const fret of possible[n]){current.push(fret);build(n+1,current);current.pop()}}build(1,[]);return shapes}
-function shapeHasRootOnString(shape,root,rootString){const idx={E:5,A:4,D:3}[rootString];if(shape[idx]===null||noteAtFret(GUITAR_STRINGS[idx+1],shape[idx])!==root)return false;if(rootString==="A"&&shape[5]!==null)return false;if(rootString==="D"&&(shape[5]!==null||shape[4]!==null))return false;return true}
+function shapeHasRootOnString(shape,root,rootString){
+  const idx={E:0,A:1,D:2}[rootString];
+
+  if(shape[idx]===null||shape[idx]===undefined)return false;
+
+  if(noteAtFret(GUITAR_STRINGS[idx+1],shape[idx])!==root)return false;
+
+  if(rootString==="A"&&shape[0]!==null)return false;
+
+  if(rootString==="D"&&(shape[0]!==null||shape[1]!==null))return false;
+
+  return true;
+}
 function findBestShapeForRootString(root,notes,rootString,extended=false){let searchNotes=[...notes];if(extended){const rn=noteNumber(root);const fifth=NOTES[(rn+7)%12];searchNotes=searchNotes.filter(n=>n!==fifth)}const matching=generateShapes(searchNotes).filter(s=>shapeHasRootOnString(s,root,rootString));if(!matching.length)return null;let best=null,bestScore=-Infinity;matching.forEach(shape=>{const played=playedNotesForShape(shape);let score=played.length*30-shape.filter(f=>f===null).length*10-fretSpan(shape)*12-estimatedFingers(shape)*8;if(extended&&rootString==="D")score+=40;if(played.length===searchNotes.length)score+=30;if(score>bestScore){bestScore=score;best=shape}});return best}
 function voicingFor(root,quality,notes,rootString){const preferred=preferredShapeFor(root,quality,rootString);if(preferred)return preferred;const extended=["9","maj9","m9","11","maj11","m11","13","maj13","m13","m7b5add9","m7b5add11","m7b5add13"].includes(quality);return findBestShapeForRootString(root,notes,rootString,extended)}
 function buildDiatonicChords(root,mode,chordLevel){const scale=scaleNotes(root,mode),modeData=MODES[mode],chords=[];for(let degree=0;degree<7;degree++){const chordRoot=scale[degree];let quality;if(chordLevel==="triads"){const rn=noteNumber(chordRoot),third=(noteNumber(scale[(degree+2)%7])-rn+12)%12,fifth=(noteNumber(scale[(degree+4)%7])-rn+12)%12;quality=third===4&&fifth===7?"major":third===3&&fifth===7?"minor":third===3&&fifth===6?"dim":third===4&&fifth===8?"aug":"major"}else if(chordLevel==="7ths")quality=diatonicSeventhQuality(scale,degree);else if(chordLevel==="9ths")quality=diatonicQualityForDegree(scale,degree,9);else if(chordLevel==="11ths")quality=diatonicQualityForDegree(scale,degree,11);else if(chordLevel==="13ths")quality=diatonicQualityForDegree(scale,degree,13);else{const rn=noteNumber(chordRoot),third=(noteNumber(scale[(degree+2)%7])-rn+12)%12,fifth=(noteNumber(scale[(degree+4)%7])-rn+12)%12;quality=third===3&&fifth===7?"m6":"6"}let notes;if(chordLevel==="6ths")notes=[chordRoot,scale[(degree+2)%7],scale[(degree+4)%7],scale[(degree+5)%7]];else notes=chordNotes(chordRoot,CHORD_TYPES[quality]);const voicings={};["E","A","D"].forEach(rs=>voicings[rs]=voicingFor(chordRoot,quality,notes,rs));chords.push({degree:modeData.names[degree],name:chordRoot+(quality==="major"?"":quality),root:chordRoot,quality,notes,voicings})}return chords}
