@@ -105,6 +105,35 @@ function shapeHasRootOnString(shape,root,rootString){
 }
 function findBestShapeForRootString(root,notes,rootString,extended=false){let searchNotes=[...notes];if(extended){const rn=noteNumber(root);const fifth=NOTES[(rn+7)%12];searchNotes=searchNotes.filter(n=>n!==fifth)}const matching=generateShapes(searchNotes).filter(s=>shapeHasRootOnString(s,root,rootString));if(!matching.length)return null;let best=null,bestScore=-Infinity;matching.forEach(shape=>{const played=playedNotesForShape(shape);let score=played.length*30-shape.filter(f=>f===null).length*10-fretSpan(shape)*12-estimatedFingers(shape)*8;if(extended&&rootString==="D")score+=40;if(played.length===searchNotes.length)score+=30;if(score>bestScore){bestScore=score;best=shape}});return best}
 function voicingFor(root,quality,notes,rootString){const preferred=preferredShapeFor(root,quality,rootString);if(preferred)return preferred;const extended=["9","maj9","m9","11","maj11","m11","13","maj13","m13","m7b5add9","m7b5add11","m7b5add13"].includes(quality);return findBestShapeForRootString(root,notes,rootString,extended)}
+function eStringDiatonicSeventhVoicing(root, quality) {
+  const templates = {
+    maj7: [8, null, 9, 9, 8, 8],
+    m7:   [8, null, 8, 8, 8, null],
+    "7":  [8, null, 8, 9, 8, null],
+    m7b5: [8, null, 8, 8, 7, null]
+  };
+
+  if (root === "E" && quality === "m7") {
+    return [0, 2, 0, 0, 0, 0];
+  }
+
+  const template = templates[quality];
+  if (!template) return null;
+
+  const rootFret =
+    (noteNumber(root) - noteNumber("E") + 12) % 12;
+  const shift = rootFret - 8;
+
+  const shape = template.map(f =>
+    f === null ? null : f + shift
+  );
+
+  if (shape.some(f => f !== null && (f < 0 || f > 15))) {
+    return null;
+  }
+
+  return shape;
+}
 const TRIAD_SHAPES = {
   E: {
     major: [0,2,2,1,0,0],
@@ -174,9 +203,19 @@ function triadVoicingFor(root, quality, notes, rootString) {
 function buildDiatonicChords(root,mode,chordLevel){const scale=scaleNotes(root,mode),modeData=MODES[mode],chords=[];for(let degree=0;degree<7;degree++){const chordRoot=scale[degree];let quality;if(chordLevel==="triads"){const rn=noteNumber(chordRoot),third=(noteNumber(scale[(degree+2)%7])-rn+12)%12,fifth=(noteNumber(scale[(degree+4)%7])-rn+12)%12;quality=third===4&&fifth===7?"major":third===3&&fifth===7?"minor":third===3&&fifth===6?"dim":third===4&&fifth===8?"aug":"major"}else if(chordLevel==="7ths")quality=diatonicSeventhQuality(scale,degree);else if(chordLevel==="9ths")quality=diatonicQualityForDegree(scale,degree,9);else if(chordLevel==="11ths")quality=diatonicQualityForDegree(scale,degree,11);else if(chordLevel==="13ths")quality=diatonicQualityForDegree(scale,degree,13);else{const rn=noteNumber(chordRoot),third=(noteNumber(scale[(degree+2)%7])-rn+12)%12,fifth=(noteNumber(scale[(degree+4)%7])-rn+12)%12;quality=third===3&&fifth===7?"m6":"6"}let notes;if(chordLevel==="6ths")notes=[chordRoot,scale[(degree+2)%7],scale[(degree+4)%7],scale[(degree+5)%7]];else notes=chordNotes(chordRoot,CHORD_TYPES[quality]);const voicings = {};
 
 ["E","A","D"].forEach(rs => {
-  voicings[rs] = chordLevel === "triads"
-    ? triadVoicingFor(chordRoot, quality, notes, rs)
-    : voicingFor(chordRoot, quality, notes, rs);
+  if (chordLevel === "triads") {
+    voicings[rs] = triadVoicingFor(
+      chordRoot, quality, notes, rs
+    );
+  } else if (chordLevel === "7ths" && rs === "E") {
+    voicings[rs] =
+      eStringDiatonicSeventhVoicing(chordRoot, quality) ||
+      voicingFor(chordRoot, quality, notes, rs);
+  } else {
+    voicings[rs] = voicingFor(
+      chordRoot, quality, notes, rs
+    );
+  }
 });chords.push({degree:modeData.names[degree],name:chordRoot+(quality==="major"?"":quality),root:chordRoot,quality,notes,voicings})}return chords}
 function formatFret(f){return f===null||f===undefined?"x":String(f)}
 function renderVoicing(v){
